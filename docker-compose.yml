@@ -1,0 +1,71 @@
+services:
+  api:
+    build: .
+    image: vaultone/api:dev
+    environment:
+      - APP_ENV=${APP_ENV:-dev}
+      - HTTP_ADDR=${HTTP_ADDR:-:8080}
+      - READ_TIMEOUT_MS=${READ_TIMEOUT_MS:-2000}
+      - WRITE_TIMEOUT_MS=${WRITE_TIMEOUT_MS:-2000}
+      - IDLE_TIMEOUT_MS=${IDLE_TIMEOUT_MS:-60000}
+      - PG_DSN=${PG_DSN:-postgres://postgres:postgres@postgres:5432/vaultone?sslmode=disable}
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-redpanda:9092}
+      - KAFKA_CLIENT_ID=${KAFKA_CLIENT_ID:-vaultone-api}
+      - LOCAL_AUTH_ENABLED=${LOCAL_AUTH_ENABLED:-false}
+      - LOCAL_API_KEY=${LOCAL_API_KEY:-dev-please-change}
+      - IDEMPOTENCY_TTL_MIN=${IDEMPOTENCY_TTL_MIN:-1440}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vaultone
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vaultone"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --check=false
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9644/v1/status/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+
+volumes:
+  pgdata: {}
+  redpanda-data: {}
+
+
